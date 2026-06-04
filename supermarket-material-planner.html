@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>超算盒NB · 门店物料点位规划工具</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #F5F4F0;
+    --surface: #FFFFFF;
+    --border: rgba(0,0,0,0.08);
+    --border-md: rgba(0,0,0,0.14);
+    --text-primary: #1A1917;
+    --text-secondary: #6B6860;
+    --text-tertiary: #A8A59E;
+    --accent: #E8401C;
+    --accent-bg: #FEF0ED;
+    --accent-border: rgba(232,64,28,0.2);
+    --blue: #1D5FAD;
+    --blue-bg: #EDF4FC;
+    --green: #1E7A4A;
+    --green-bg: #EBF7F1;
+    --amber: #9A5A00;
+    --amber-bg: #FDF5E6;
+    --purple: #5B3FA8;
+    --purple-bg: #F0ECFC;
+    --pink: #A83060;
+    --pink-bg: #FCE8F1;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Header */
+  .header {
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border-md);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 52px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .brand-badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: .04em;
+  }
+  .header-title { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+  .header-sub { font-size: 12px; color: var(--text-tertiary); }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .btn-outline {
+    padding: 6px 14px; border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border-md); background: transparent;
+    font-size: 12px; font-family: inherit; color: var(--text-secondary);
+    cursor: pointer; transition: background .15s;
+  }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-primary {
+    padding: 6px 14px; border-radius: var(--radius-sm);
+    border: none; background: var(--accent);
+    font-size: 12px; font-family: inherit; color: #fff;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .btn-primary:hover { opacity: .88; }
+
+  /* Layout */
+  .app-body {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 52px);
+    overflow: hidden;
+  }
+
+  /* Left legend + canvas */
+  .canvas-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; }
+  .leg-item {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: var(--text-secondary);
+  }
+  .leg-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .toolbar-sep { flex: 1; }
+  .zoom-info { font-size: 11px; color: var(--text-tertiary); }
+
+  .canvas-wrap {
+    flex: 1;
+    overflow: auto;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border-md);
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  svg#floor {
+    display: block;
+    width: 100%;
+    min-width: 640px;
+    height: auto;
+  }
+
+  /* Right panel */
+  .panel {
+    width: 280px;
+    border-left: 0.5px solid var(--border-md);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 16px 10px;
+    border-bottom: 0.5px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-header-title {
+    font-size: 11px; font-weight: 500; color: var(--text-tertiary);
+    text-transform: uppercase; letter-spacing: .07em;
+  }
+  .panel-scroll { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  /* No selection state */
+  .no-sel {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; height: 100%; color: var(--text-tertiary); text-align: center; padding: 24px;
+  }
+  .no-sel-icon {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .no-sel p { font-size: 12px; line-height: 1.6; }
+
+  /* Zone info */
+  .zone-header { display: flex; align-items: flex-start; gap: 10px; }
+  .zone-color-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; margin-top: 4px; }
+  .zone-name { font-size: 15px; font-weight: 500; color: var(--text-primary); }
+  .zone-desc { font-size: 12px; color: var(--text-secondary); margin-top: 3px; line-height: 1.5; }
+
+  /* Material chips */
+  .section-label {
+    font-size: 11px; font-weight: 500; color: var(--text-tertiary);
+    text-transform: uppercase; letter-spacing: .06em;
+    margin-bottom: 6px;
+  }
+  .mat-list { display: flex; flex-direction: column; gap: 5px; }
+  .mat-chip {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border-md);
+    background: #fff;
+    cursor: pointer;
+    transition: all .15s;
+    text-align: left;
+  }
+  .mat-chip:hover { background: var(--bg); border-color: var(--border-md); }
+  .mat-chip.active {
+    border-color: var(--accent-border);
+    background: var(--accent-bg);
+  }
+  .mat-chip-icon {
+    width: 22px; height: 22px; border-radius: 5px;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0; margin-top: 1px;
+    color: var(--text-secondary);
+  }
+  .mat-chip.active .mat-chip-icon { background: var(--accent); color: #fff; }
+  .mat-chip-text {}
+  .mat-chip-label { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+  .mat-chip-spec { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+  .mat-chip.active .mat-chip-label { color: var(--accent); }
+  .mat-check { margin-left: auto; flex-shrink: 0; font-size: 14px; color: var(--accent); align-self: center; }
+
+  /* Note area */
+  .note-box {
+    border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .note-box-label {
+    padding: 6px 10px;
+    background: var(--bg);
+    font-size: 11px; color: var(--text-tertiary);
+    border-bottom: 0.5px solid var(--border);
+  }
+  textarea.note-input {
+    width: 100%; padding: 8px 10px;
+    font-size: 12px; line-height: 1.6;
+    color: var(--text-primary);
+    background: #fff;
+    border: none; outline: none;
+    resize: none; min-height: 72px;
+    font-family: 'Noto Sans SC', sans-serif;
+  }
+
+  /* Action buttons */
+  .action-col { display: flex; flex-direction: column; gap: 6px; }
+  .btn-save {
+    width: 100%; padding: 8px;
+    border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border-md);
+    background: #fff;
+    font-size: 12px; font-family: inherit;
+    color: var(--text-primary);
+    cursor: pointer; transition: background .15s;
+  }
+  .btn-save:hover { background: var(--bg); }
+  .btn-gen {
+    width: 100%; padding: 9px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: var(--accent);
+    font-size: 12px; font-family: inherit;
+    color: #fff; font-weight: 500;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .btn-gen:hover { opacity: .88; }
+  .saved-hint {
+    font-size: 11px; color: var(--green);
+    text-align: center; display: none;
+  }
+
+  /* Summary badge */
+  .summary-bar {
+    margin-top: auto;
+    border-top: 0.5px solid var(--border);
+    padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+    flex-shrink: 0;
+  }
+  .summary-label { font-size: 11px; color: var(--text-tertiary); }
+  .summary-count { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+
+  /* SVG zone hover */
+  .zone-g rect.zone-bg { cursor: pointer; transition: filter .15s; }
+  .zone-g:hover rect.zone-bg { filter: brightness(.95); }
+  .zone-g.selected rect.zone-bg { stroke-width: 2; }
+
+  /* Export modal */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.4);
+    z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: 24px;
+    width: 420px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0,0,0,.12);
+  }
+  .modal-title { font-size: 15px; font-weight: 500; margin-bottom: 8px; }
+  .modal-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* Print styles */
+  @media print {
+    .header, .panel, .toolbar { display: none !important; }
+    .canvas-wrap { border: none; box-shadow: none; }
+    svg#floor { width: 100%; height: auto; }
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .app-body { flex-direction: column; height: auto; overflow: auto; }
+    .panel { width: 100%; border-left: none; border-top: 0.5px solid var(--border-md); height: auto; }
+    .canvas-col { overflow: visible; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <span class="brand-badge">NB</span>
+    <div>
+      <div class="header-title">超算盒 · 门店物料点位规划</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="zoom-info" id="mat-total-header">已添加 0 处物料</span>
+    <button class="btn-outline" onclick="clearAll()">清空</button>
+    <button class="btn-primary" onclick="exportSummary()">导出清单</button>
+  </div>
+</header>
+
+<div class="app-body">
+  <div class="canvas-col">
+    <div class="toolbar">
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:#C0DD97"></div>入口/收银</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#B5D4F4"></div>生鲜区</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#FAC775"></div>促销堆头</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#D3D1C7"></div>陈列货架</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#F4C0D1"></div>冷藏/冷冻</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#CECBF6"></div>非食品区</div>
+      </div>
+      <div class="toolbar-sep"></div>
+      <span style="font-size:11px;color:var(--text-tertiary)">点击区域添加物料 · 可多区域叠加</span>
+    </div>
+
+    <div class="canvas-wrap">
+      <svg id="floor" viewBox="0 0 680 540" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M20 0 L0 0 0 20" fill="none" stroke="#E8E6E0" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="680" height="540" fill="url(#grid)"/>
+        <rect x="1" y="1" width="678" height="538" fill="none" stroke="#888780" stroke-width="1.5"/>
+
+        <!-- 入口标注 -->
+        <rect x="260" y="0" width="160" height="5" fill="#639922"/>
+        <text x="340" y="16" text-anchor="middle" font-size="11" fill="#888780" font-family="'Noto Sans SC',sans-serif">▲ 主入口</text>
+        <rect x="0" y="210" width="5" height="80" fill="#9FE1CB"/>
+        <text x="14" y="255" text-anchor="middle" font-size="10" fill="#888780" font-family="'Noto Sans SC',sans-serif" transform="rotate(-90,14,255)">侧出口</text>
+
+        <!-- 入口展示区 -->
+        <g class="zone-g" data-zone="entrance" onclick="selectZone('entrance')">
+          <rect class="zone-bg" x="22" y="22" width="636" height="72" rx="5" fill="#EAF3DE" stroke="#97C459" stroke-width="1"/>
+          <text x="180" y="40" font-size="11" font-weight="500" fill="#3B6D11" font-family="'Noto Sans SC',sans-serif" pointer-events="none">入口展示区 · 爆品堆头 · 本周特惠</text>
+          <!-- 展台模块 -->
+          <rect x="32" y="30" width="80" height="54" rx="3" fill="#C0DD97" stroke="#639922" stroke-width="0.5"/>
+          <text x="72" y="53" text-anchor="middle" font-size="10" fill="#27500A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">新品展台</text>
+          <text x="72" y="67" text-anchor="middle" font-size="9" fill="#3B6D11" font-family="'Noto Sans SC',sans-serif" pointer-events="none">落地展架</text>
+          <rect x="122" y="30" width="64" height="54" rx="3" fill="#C0DD97" stroke="#639922" stroke-width="0.5"/>
+          <text x="154" y="58" text-anchor="middle" font-size="10" fill="#27500A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">堆头A</text>
+          <rect x="196" y="30" width="64" height="54" rx="3" fill="#C0DD97" stroke="#639922" stroke-width="0.5"/>
+          <text x="228" y="58" text-anchor="middle" font-size="10" fill="#27500A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">堆头B</text>
+          <!-- 购物车 -->
+          <rect x="276" y="34" width="18" height="46" rx="2" fill="#fff" stroke="#B4B2A9" stroke-width="0.5"/>
+          <rect x="302" y="34" width="18" height="46" rx="2" fill="#fff" stroke="#B4B2A9" stroke-width="0.5"/>
+          <rect x="328" y="34" width="18" height="46" rx="2" fill="#fff" stroke="#B4B2A9" stroke-width="0.5"/>
+          <text x="370" y="60" font-size="9" fill="#B4B2A9" font-family="'Noto Sans SC',sans-serif" pointer-events="none">购物车/篮区</text>
+          <!-- 收银台 -->
+          <rect x="488" y="30" width="160" height="54" rx="3" fill="#C0DD97" stroke="#639922" stroke-width="0.5"/>
+          <text x="568" y="53" text-anchor="middle" font-size="10" fill="#27500A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">收银台 × 4</text>
+          <text x="568" y="68" text-anchor="middle" font-size="9" fill="#3B6D11" font-family="'Noto Sans SC',sans-serif" pointer-events="none">收银前斜口篮</text>
+          <!-- 添加物料徽章 -->
+          <circle id="badge-entrance" cx="648" cy="28" r="8" fill="#E8401C" style="display:none"/>
+          <text id="badge-entrance-txt" x="648" y="32" text-anchor="middle" font-size="9" fill="#fff" font-family="'Noto Sans SC',sans-serif" style="display:none">0</text>
+        </g>
+
+        <!-- 通道虚线 -->
+        <line x1="218" y1="104" x2="218" y2="308" stroke="#C8C5BE" stroke-width="1" stroke-dasharray="5,4"/>
+        <line x1="448" y1="104" x2="448" y2="308" stroke="#C8C5BE" stroke-width="1" stroke-dasharray="5,4"/>
+        <text x="228" y="200" font-size="9" fill="#B4B2A9" font-family="'Noto Sans SC',sans-serif" transform="rotate(-90,228,200)">主通道</text>
+        <text x="458" y="210" font-size="9" fill="#B4B2A9" font-family="'Noto Sans SC',sans-serif" transform="rotate(-90,458,210)">副通道</text>
+
+        <!-- 生鲜区 -->
+        <g class="zone-g" data-zone="fresh" onclick="selectZone('fresh')">
+          <rect class="zone-bg" x="22" y="104" width="186" height="196" rx="5" fill="#E6F1FB" stroke="#85B7EB" stroke-width="1"/>
+          <text x="115" y="122" text-anchor="middle" font-size="11" font-weight="500" fill="#185FA5" font-family="'Noto Sans SC',sans-serif" pointer-events="none">生鲜区</text>
+          <rect x="32" y="128" width="166" height="30" rx="3" fill="#B5D4F4" stroke="#85B7EB" stroke-width="0.5"/>
+          <text x="115" y="147" text-anchor="middle" font-size="10" fill="#0C447C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">蔬果陈列台</text>
+          <rect x="32" y="166" width="166" height="30" rx="3" fill="#B5D4F4" stroke="#85B7EB" stroke-width="0.5"/>
+          <text x="115" y="185" text-anchor="middle" font-size="10" fill="#0C447C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">肉类 / 海鲜柜</text>
+          <rect x="32" y="204" width="166" height="30" rx="3" fill="#B5D4F4" stroke="#85B7EB" stroke-width="0.5"/>
+          <text x="115" y="223" text-anchor="middle" font-size="10" fill="#0C447C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">烘焙 / 熟食</text>
+          <rect x="32" y="242" width="166" height="30" rx="3" fill="#B5D4F4" stroke="#85B7EB" stroke-width="0.5"/>
+          <text x="115" y="261" text-anchor="middle" font-size="10" fill="#0C447C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">豆腐 / 豆制品</text>
+          <text x="115" y="290" text-anchor="middle" font-size="9" fill="#378ADD" font-family="'Noto Sans SC',sans-serif" pointer-events="none">价格签 · 品类导视牌</text>
+          <circle id="badge-fresh" cx="198" cy="110" r="8" fill="#E8401C" style="display:none"/>
+          <text id="badge-fresh-txt" x="198" y="114" text-anchor="middle" font-size="9" fill="#fff" font-family="'Noto Sans SC',sans-serif" style="display:none">0</text>
+        </g>
+
+        <!-- 主通道促销堆头 -->
+        <g class="zone-g" data-zone="promo" onclick="selectZone('promo')">
+          <rect class="zone-bg" x="228" y="104" width="210" height="196" rx="5" fill="#FAEEDA" stroke="#EF9F27" stroke-width="1"/>
+          <text x="333" y="122" text-anchor="middle" font-size="11" font-weight="500" fill="#854F0B" font-family="'Noto Sans SC',sans-serif" pointer-events="none">主通道 · 促销堆头</text>
+          <rect x="238" y="128" width="92" height="72" rx="3" fill="#FAC775" stroke="#EF9F27" stroke-width="0.5"/>
+          <text x="284" y="162" text-anchor="middle" font-size="10" fill="#633806" font-family="'Noto Sans SC',sans-serif" pointer-events="none">堆头 C</text>
+          <text x="284" y="177" text-anchor="middle" font-size="9" fill="#854F0B" font-family="'Noto Sans SC',sans-serif" pointer-events="none">POP海报</text>
+          <rect x="338" y="128" width="92" height="72" rx="3" fill="#FAC775" stroke="#EF9F27" stroke-width="0.5"/>
+          <text x="384" y="162" text-anchor="middle" font-size="10" fill="#633806" font-family="'Noto Sans SC',sans-serif" pointer-events="none">堆头 D</text>
+          <text x="384" y="177" text-anchor="middle" font-size="9" fill="#854F0B" font-family="'Noto Sans SC',sans-serif" pointer-events="none">POP海报</text>
+          <rect x="238" y="208" width="92" height="68" rx="3" fill="#FAC775" stroke="#EF9F27" stroke-width="0.5"/>
+          <text x="284" y="242" text-anchor="middle" font-size="10" fill="#633806" font-family="'Noto Sans SC',sans-serif" pointer-events="none">堆头 E</text>
+          <rect x="338" y="208" width="92" height="68" rx="3" fill="#FAC775" stroke="#EF9F27" stroke-width="0.5"/>
+          <text x="384" y="242" text-anchor="middle" font-size="10" fill="#633806" font-family="'Noto Sans SC',sans-serif" pointer-events="none">堆头 F</text>
+          <text x="333" y="290" text-anchor="middle" font-size="9" fill="#BA7517" font-family="'Noto Sans SC',sans-serif" pointer-events="none">吊旗串 · 地贴箭头</text>
+          <circle id="badge-promo" cx="428" cy="110" r="8" fill="#E8401C" style="display:none"/>
+          <text id="badge-promo-txt" x="428" y="114" text-anchor="middle" font-size="9" fill="#fff" font-family="'Noto Sans SC',sans-serif" style="display:none">0</text>
+        </g>
+
+        <!-- 冷藏/冷冻区 -->
+        <g class="zone-g" data-zone="cold" onclick="selectZone('cold')">
+          <rect class="zone-bg" x="458" y="104" width="200" height="196" rx="5" fill="#FBEAF0" stroke="#ED93B1" stroke-width="1"/>
+          <text x="558" y="122" text-anchor="middle" font-size="11" font-weight="500" fill="#993556" font-family="'Noto Sans SC',sans-serif" pointer-events="none">冷藏 / 冷冻区</text>
+          <rect x="468" y="128" width="180" height="34" rx="3" fill="#F4C0D1" stroke="#ED93B1" stroke-width="0.5"/>
+          <text x="558" y="149" text-anchor="middle" font-size="10" fill="#72243E" font-family="'Noto Sans SC',sans-serif" pointer-events="none">冷藏柜 (乳制品/饮料)</text>
+          <rect x="468" y="170" width="180" height="34" rx="3" fill="#F4C0D1" stroke="#ED93B1" stroke-width="0.5"/>
+          <text x="558" y="191" text-anchor="middle" font-size="10" fill="#72243E" font-family="'Noto Sans SC',sans-serif" pointer-events="none">冷冻柜 (速食/冰品)</text>
+          <rect x="468" y="212" width="180" height="34" rx="3" fill="#F4C0D1" stroke="#ED93B1" stroke-width="0.5"/>
+          <text x="558" y="233" text-anchor="middle" font-size="10" fill="#72243E" font-family="'Noto Sans SC',sans-serif" pointer-events="none">冷藏柜 (肉类预包装)</text>
+          <rect x="468" y="254" width="180" height="26" rx="3" fill="#F4C0D1" stroke="#ED93B1" stroke-width="0.5"/>
+          <text x="558" y="271" text-anchor="middle" font-size="10" fill="#72243E" font-family="'Noto Sans SC',sans-serif" pointer-events="none">冷藏柜 (鲜奶/豆腐)</text>
+          <text x="558" y="292" text-anchor="middle" font-size="9" fill="#D4537E" font-family="'Noto Sans SC',sans-serif" pointer-events="none">柜门贴 · 电子价签</text>
+          <circle id="badge-cold" cx="648" cy="110" r="8" fill="#E8401C" style="display:none"/>
+          <text id="badge-cold-txt" x="648" y="114" text-anchor="middle" font-size="9" fill="#fff" font-family="'Noto Sans SC',sans-serif" style="display:none">0</text>
+        </g>
+
+        <!-- 通道横线 -->
+        <line x1="22" y1="308" x2="658" y2="308" stroke="#C8C5BE" stroke-width="1" stroke-dasharray="5,4"/>
+
+        <!-- 货架区A 食品饮料 -->
+        <g class="zone-g" data-zone="shelf-a" onclick="selectZone('shelf-a')">
+          <rect class="zone-bg" x="22" y="318" width="314" height="110" rx="5" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="1"/>
+          <text x="179" y="334" text-anchor="middle" font-size="11" font-weight="500" fill="#444441" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架区 A · 食品饮料</text>
+          <rect x="32" y="340" width="140" height="22" rx="2" fill="#D3D1C7" stroke="#B4B2A9" stroke-width="0.5"/>
+          <text x="102" y="355" text-anchor="middle" font-size="9" fill="#2C2C2A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 A1 (饮料/水)</text>
+          <rect x="32" y="368" width="140" height="22" rx="2" fill="#D3D1C7" stroke="#B4B2A9" stroke-width="0.5"/>
+          <text x="102" y="383" text-anchor="middle" font-size="9" fill="#2C2C2A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 A2 (零食)</text>
+          <rect x="32" y="396" width="140" height="22" rx="2" fill="#D3D1C7" stroke="#B4B2A9" stroke-width="0.5"/>
+          <text x="102" y="411" text-anchor="middle" font-size="9" fill="#2C2C2A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 A3 (方便食品)</text>
+          <rect x="186" y="340" width="140" height="22" rx="2" fill="#D3D1C7" stroke="#B4B2A9" stroke-width="0.5"/>
+          <text x="256" y="355" text-anchor="middle" font-size="9" fill="#2C2C2A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 B1 (酒水)</text>
+          <rect x="186" y="368" width="140" height="22" rx="2" fill="#D3D1C7" stroke="#B4B2A9" stroke-width="0.5"/>
+          <text x="256" y="383" text-anchor="middle" font-size="9" fill="#2C2C2A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 B2 (调味品/粮油)</text>
+          <rect x="186" y="396" width="140" height="22" rx="2" fill="#D3D1C7" stroke="#B4B2A9" stroke-width="0.5"/>
+          <text x="256" y="411" text-anchor="middle" font-size="9" fill="#2C2C2A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 B3 (冲泡/早餐)</text>
+          <text x="179" y="422" text-anchor="middle" font-size="9" fill="#888780" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架标签 · 跳跳卡 · 端架海报</text>
+          <circle id="badge-shelf-a" cx="326" cy="324" r="8" fill="#E8401C" style="display:none"/>
+          <text id="badge-shelf-a-txt" x="326" y="328" text-anchor="middle" font-size="9" fill="#fff" font-family="'Noto Sans SC',sans-serif" style="display:none">0</text>
+        </g>
+
+        <!-- 货架区B 非食品 -->
+        <g class="zone-g" data-zone="shelf-b" onclick="selectZone('shelf-b')">
+          <rect class="zone-bg" x="346" y="318" width="312" height="110" rx="5" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="1"/>
+          <text x="502" y="334" text-anchor="middle" font-size="11" font-weight="500" fill="#3C3489" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架区 B · 非食品 / 日化</text>
+          <rect x="356" y="340" width="140" height="22" rx="2" fill="#CECBF6" stroke="#AFA9EC" stroke-width="0.5"/>
+          <text x="426" y="355" text-anchor="middle" font-size="9" fill="#26215C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 C1 (洗护/清洁)</text>
+          <rect x="356" y="368" width="140" height="22" rx="2" fill="#CECBF6" stroke="#AFA9EC" stroke-width="0.5"/>
+          <text x="426" y="383" text-anchor="middle" font-size="9" fill="#26215C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 C2 (个人护理)</text>
+          <rect x="356" y="396" width="140" height="22" rx="2" fill="#CECBF6" stroke="#AFA9EC" stroke-width="0.5"/>
+          <text x="426" y="411" text-anchor="middle" font-size="9" fill="#26215C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 C3 (厨具/杂货)</text>
+          <rect x="508" y="340" width="140" height="22" rx="2" fill="#CECBF6" stroke="#AFA9EC" stroke-width="0.5"/>
+          <text x="578" y="355" text-anchor="middle" font-size="9" fill="#26215C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 D1 (文具/礼品)</text>
+          <rect x="508" y="368" width="140" height="22" rx="2" fill="#CECBF6" stroke="#AFA9EC" stroke-width="0.5"/>
+          <text x="578" y="383" text-anchor="middle" font-size="9" fill="#26215C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 D2 (季节商品)</text>
+          <rect x="508" y="396" width="140" height="22" rx="2" fill="#CECBF6" stroke="#AFA9EC" stroke-width="0.5"/>
+          <text x="578" y="411" text-anchor="middle" font-size="9" fill="#26215C" font-family="'Noto Sans SC',sans-serif" pointer-events="none">货架排 D3 (特供折扣)</text>
+          <text x="502" y="422" text-anchor="middle" font-size="9" fill="#888780" font-family="'Noto Sans SC',sans-serif" pointer-events="none">分区导视牌 · 货架标签 · 吊旗</text>
+          <circle id="badge-shelf-b" cx="648" cy="324" r="8" fill="#E8401C" style="display:none"/>
+          <text id="badge-shelf-b-txt" x="648" y="328" text-anchor="middle" font-size="9" fill="#fff" font-family="'Noto Sans SC',sans-serif" style="display:none">0</text>
+        </g>
+
+        <!-- 收银前冲动区 -->
+        <g class="zone-g" data-zone="checkout" onclick="selectZone('checkout')">
+          <rect class="zone-bg" x="22" y="440" width="636" height="82" rx="5" fill="#EAF3DE" stroke="#97C459" stroke-width="1"/>
+          <text x="200" y="456" text-anchor="middle" font-size="11" font-weight="500" fill="#3B6D11" font-family="'Noto Sans SC',sans-serif" pointer-events="none">收银前冲动区 · 特惠展示 · 品牌出口物料</text>
+          <rect x="32" y="462" width="96" height="50" rx="3" fill="#C0DD97" stroke="#97C459" stroke-width="0.5"/>
+          <text x="80" y="483" text-anchor="middle" font-size="9" fill="#27500A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">斜口篮A</text>
+          <text x="80" y="497" text-anchor="middle" font-size="9" fill="#3B6D11" font-family="'Noto Sans SC',sans-serif" pointer-events="none">小零食/糖果</text>
+          <rect x="138" y="462" width="96" height="50" rx="3" fill="#C0DD97" stroke="#97C459" stroke-width="0.5"/>
+          <text x="186" y="483" text-anchor="middle" font-size="9" fill="#27500A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">斜口篮B</text>
+          <text x="186" y="497" text-anchor="middle" font-size="9" fill="#3B6D11" font-family="'Noto Sans SC',sans-serif" pointer-events="none">电池/口香糖</text>
+          <rect x="244" y="462" width="96" height="50" rx="3" fill="#C0DD97" stroke="#97C459" stroke-width="0.5"/>
+          <text x="292" y="487" text-anchor="middle" font-size="9" fill="#27500A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">特价展示架</text>
+          <rect x="460" y="462" width="188" height="50" rx="3" fill="#C0DD97" stroke="#97C459" stroke-width="0.5"/>
+          <text x="554" y="483" text-anchor="middle" font-size="9" fill="#27500A" font-family="'Noto Sans SC',sans-serif" pointer-events="none">出口 · 品牌形象牌</text>
+          <text x="554" y="498" text-anchor="middle" font-size="9" fill="#3B6D11" font-family="'Noto Sans SC',sans-serif" pointer-events="none">会员招募 / 下次活动预告</text>
+          <circle id="badge-checkout" cx="648" cy="446" r="8" fill="#E8401C" style="display:none"/>
+          <text id="badge-checkout-txt" x="648" y="450" text-anchor="middle" font-size="9" fill="#fff" font-family="'Noto Sans SC',sans-serif" style="display:none">0</text>
+        </g>
+
+        <!-- 选中框 -->
+        <rect id="sel-indicator" x="0" y="0" width="0" height="0" fill="none" stroke="#E8401C" stroke-width="2" rx="6" stroke-dasharray="6,3" style="display:none;pointer-events:none"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-header-title">物料编辑器</div>
+    </div>
+
+    <div class="panel-scroll">
+      <!-- No selection -->
+      <div class="no-sel" id="no-sel">
+        <div class="no-sel-icon">👆</div>
+        <p>点击左侧任意<br>区域开始编辑物料</p>
+      </div>
+
+      <!-- Selection panel -->
+      <div id="sel-panel" style="display:none;flex-direction:column;gap:14px">
+        <div class="zone-header">
+          <div class="zone-color-dot" id="zone-dot"></div>
+          <div>
+            <div class="zone-name" id="zone-title">—</div>
+            <div class="zone-desc" id="zone-desc">—</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-label">可添加物料</div>
+          <div class="mat-list" id="mat-list"></div>
+        </div>
+
+        <div>
+          <div class="section-label">设计备注</div>
+          <div class="note-box">
+            <div class="note-box-label">尺寸 · 色号 · 工艺 · 数量</div>
+            <textarea class="note-input" id="note-input" placeholder="例：价签底色用品牌红 #E8401C，字体黑体加粗，数量每排2张..."></textarea>
+          </div>
+        </div>
+
+        <div class="action-col">
+          <button class="btn-save" onclick="saveNote()">保存备注</button>
+          <div class="saved-hint" id="saved-hint">✓ 已保存</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary bar -->
+    <div class="summary-bar">
+      <div class="summary-label">全店物料汇总</div>
+      <div class="summary-count" id="total-count">尚未添加物料</div>
+    </div>
+  </div>
+</div>
+
+<!-- Export modal -->
+<div class="modal-overlay" id="export-modal">
+  <div class="modal">
+    <div class="modal-title">导出物料清单</div>
+    <div class="modal-desc">将以纯文本格式导出各区域已勾选物料及备注，可粘贴至钉钉文档、飞书或Excel中使用。</div>
+    <pre id="export-content" style="background:var(--bg);border-radius:6px;padding:12px;font-size:11px;line-height:1.7;max-height:260px;overflow-y:auto;white-space:pre-wrap;font-family:'Noto Sans SC',sans-serif;color:var(--text-primary);border:0.5px solid var(--border-md)"></pre>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn-outline" onclick="closeModal()">关闭</button>
+      <button class="btn-primary" onclick="copyExport()">复制内容</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const zones = {
+  entrance: {
+    title: '入口展示区',
+    desc: '顾客第一视觉触点 · 爆品堆头 · 新品展台 · 本周特惠',
+    color: '#639922',
+    dot: '#C0DD97',
+    svgX: 22, svgY: 22, svgW: 636, svgH: 72,
+    mats: [
+      {icon:'📄', label:'落地展架海报', spec:'W600×H1600mm，X展架'},
+      {icon:'🚩', label:'入口吊旗', spec:'W210×H420mm，天花吊挂'},
+      {icon:'📋', label:'堆头POP背板', spec:'W600×H900mm，堆头正面'},
+      {icon:'🗺', label:'店内布局导引图', spec:'A2，贴近入口右侧'},
+      {icon:'🏷', label:'入口大字促销签', spec:'A3，红底白字，价格占60%面积'},
+    ]
+  },
+  fresh: {
+    title: '生鲜区',
+    desc: '高频品类 · 价格签清晰度是核心 · 品类导视必配',
+    color: '#185FA5',
+    dot: '#B5D4F4',
+    svgX: 22, svgY: 104, svgW: 186, svgH: 196,
+    mats: [
+      {icon:'🏷', label:'货架价格签', spec:'W70×H40mm，层板前沿标签槽'},
+      {icon:'📌', label:'品类分区导视牌', spec:'W900×H150mm，货架顶横条'},
+      {icon:'⭐', label:'特价跳跳卡', spec:'Φ100mm，弹片伸出5cm'},
+      {icon:'📝', label:'商品说明卡', spec:'A6，产地/规格/储存方式'},
+      {icon:'🖼', label:'品类形象海报', spec:'W600×H400mm，区域入口'},
+    ]
+  },
+  promo: {
+    title: '主通道 · 促销堆头',
+    desc: '全店最高曝光区 · 价格冲击力最强 · 价格是主角',
+    color: '#854F0B',
+    dot: '#FAC775',
+    svgX: 228, svgY: 104, svgW: 210, svgH: 196,
+    mats: [
+      {icon:'📋', label:'堆头POP背板', spec:'W900×H600mm，横版正面'},
+      {icon:'🚩', label:'通道吊旗串', spec:'W210×H420mm，串联4-6片'},
+      {icon:'⬇', label:'地贴动线箭头', spec:'Φ300mm，防滑哑光材质'},
+      {icon:'🏷', label:'大字促销价签', spec:'A5，价格数字≥72pt'},
+      {icon:'🎯', label:'堆头侧贴', spec:'W200×H400mm，堆头侧面'},
+    ]
+  },
+  cold: {
+    title: '冷藏 / 冷冻区',
+    desc: '防水防雾材质 · 柜门贴是关键 · 可配电子价签',
+    color: '#993556',
+    dot: '#F4C0D1',
+    svgX: 458, svgY: 104, svgW: 200, svgH: 196,
+    mats: [
+      {icon:'❄', label:'柜门贴', spec:'按实际柜门尺寸，防雾覆膜'},
+      {icon:'🏷', label:'电子价签(ESL)', spec:'2.9寸/4.2寸，嵌入层板槽'},
+      {icon:'🖼', label:'品类形象贴', spec:'W600×H400mm，柜顶/柜侧'},
+      {icon:'🌡', label:'温度提示贴', spec:'A6，贴柜门醒目位置'},
+      {icon:'⭐', label:'特价柜面价签', spec:'A5，红底白字，防雾材质'},
+    ]
+  },
+  'shelf-a': {
+    title: '货架区 A · 食品饮料',
+    desc: '标准货架区 · 一物一签 · 端架做促销海报',
+    color: '#444441',
+    dot: '#D3D1C7',
+    svgX: 22, svgY: 318, svgW: 314, svgH: 110,
+    mats: [
+      {icon:'🏷', label:'货架标签条', spec:'W70×H40mm，插入层板前沿槽'},
+      {icon:'📄', label:'端架促销海报', spec:'W600×H900mm，竖版'},
+      {icon:'⭐', label:'跳跳卡 Wobbler', spec:'W120×H80mm，弹片外伸7cm'},
+      {icon:'📌', label:'货架顶分类牌', spec:'W900×H150mm，横条型'},
+      {icon:'🎯', label:'货架层隔板贴', spec:'W200×H30mm，品类色标'},
+    ]
+  },
+  'shelf-b': {
+    title: '货架区 B · 非食品 / 日化',
+    desc: '日化区 · 分区导视是重点 · 品类色块强化识别',
+    color: '#3C3489',
+    dot: '#CECBF6',
+    svgX: 346, svgY: 318, svgW: 312, svgH: 110,
+    mats: [
+      {icon:'🏷', label:'货架标签条', spec:'W70×H40mm，插入层板前沿槽'},
+      {icon:'📌', label:'分区导视色块牌', spec:'W600×H200mm，色块+大字'},
+      {icon:'🚩', label:'品类吊牌', spec:'W300×H400mm，天花吊挂'},
+      {icon:'🏷', label:'特价价签', spec:'A6，红底白字，必标结束日期'},
+      {icon:'📄', label:'端架形象海报', spec:'W600×H900mm，品类形象'},
+    ]
+  },
+  checkout: {
+    title: '收银前冲动区 / 出口',
+    desc: '最后冲动购买点 · 单价≤10元商品 · 出口品牌形象',
+    color: '#3B6D11',
+    dot: '#C0DD97',
+    svgX: 22, svgY: 440, svgW: 636, svgH: 82,
+    mats: [
+      {icon:'🏷', label:'斜口篮大价签', spec:'A5，超大字号，单价突出'},
+      {icon:'📋', label:'特价台卡', spec:'W300×H200mm，立式'},
+      {icon:'📱', label:'会员招募贴', spec:'A4，含二维码，贴收银台侧'},
+      {icon:'🖼', label:'出口品牌形象牌', spec:'W1200×H600mm，出口正面'},
+      {icon:'🎯', label:'排队等候区地贴', spec:'W400×H400mm，防滑哑光'},
+    ]
+  }
+}
+
+const notes = {}
+const activeMats = {}
+let currentZone = null
+
+function selectZone(zoneKey) {
+  currentZone = zoneKey
+  const z = zones[zoneKey]
+
+  document.getElementById('no-sel').style.display = 'none'
+  const sp = document.getElementById('sel-panel')
+  sp.style.display = 'flex'
+
+  document.getElementById('zone-dot').style.background = z.dot
+  document.getElementById('zone-title').textContent = z.title
+  document.getElementById('zone-desc').textContent = z.desc
+
+  if (!activeMats[zoneKey]) activeMats[zoneKey] = {}
+
+  const list = document.getElementById('mat-list')
+  list.innerHTML = ''
+  z.mats.forEach((m, i) => {
+    const chip = document.createElement('button')
+    const isActive = !!activeMats[zoneKey][i]
+    chip.className = 'mat-chip' + (isActive ? ' active' : '')
+    chip.innerHTML = `
+      <div class="mat-chip-icon">${m.icon}</div>
+      <div class="mat-chip-text">
+        <div class="mat-chip-label">${m.label}</div>
+        <div class="mat-chip-spec">${m.spec}</div>
+      </div>
+      ${isActive ? '<span class="mat-check">✓</span>' : ''}
+    `
+    chip.onclick = () => toggleMat(zoneKey, i, chip, m)
+    list.appendChild(chip)
+  })
+
+  document.getElementById('note-input').value = notes[zoneKey] || ''
+  document.getElementById('saved-hint').style.display = 'none'
+
+  // Selection indicator
+  const ind = document.getElementById('sel-indicator')
+  ind.setAttribute('x', z.svgX - 3)
+  ind.setAttribute('y', z.svgY - 3)
+  ind.setAttribute('width', z.svgW + 6)
+  ind.setAttribute('height', z.svgH + 6)
+  ind.style.display = 'block'
+}
+
+function toggleMat(zoneKey, idx, chip, mat) {
+  activeMats[zoneKey][idx] = !activeMats[zoneKey][idx]
+  const isActive = activeMats[zoneKey][idx]
+  chip.className = 'mat-chip' + (isActive ? ' active' : '')
+  chip.innerHTML = `
+    <div class="mat-chip-icon">${mat.icon}</div>
+    <div class="mat-chip-text">
+      <div class="mat-chip-label">${mat.label}</div>
+      <div class="mat-chip-spec">${mat.spec}</div>
+    </div>
+    ${isActive ? '<span class="mat-check">✓</span>' : ''}
+  `
+  chip.onclick = () => toggleMat(zoneKey, idx, chip, mat)
+  updateBadge(zoneKey)
+  updateTotal()
+}
+
+function updateBadge(zoneKey) {
+  const count = Object.values(activeMats[zoneKey] || {}).filter(Boolean).length
+  const badge = document.getElementById('badge-' + zoneKey)
+  const txt = document.getElementById('badge-' + zoneKey + '-txt')
+  if (badge && txt) {
+    badge.style.display = count > 0 ? 'block' : 'none'
+    txt.style.display = count > 0 ? 'block' : 'none'
+    txt.textContent = count
+  }
+}
+
+function updateTotal() {
+  let total = 0
+  Object.values(activeMats).forEach(z => {
+    total += Object.values(z).filter(Boolean).length
+  })
+  const el = document.getElementById('total-count')
+  const header = document.getElementById('mat-total-header')
+  if (total === 0) {
+    el.textContent = '尚未添加物料'
+    header.textContent = '已添加 0 处物料'
+  } else {
+    el.textContent = `已选 ${total} 项物料 · ${Object.keys(activeMats).filter(k => Object.values(activeMats[k]||{}).some(Boolean)).length} 个区域`
+    header.textContent = `已添加 ${total} 处物料`
+  }
+}
+
+function saveNote() {
+  if (!currentZone) return
+  notes[currentZone] = document.getElementById('note-input').value
+  const hint = document.getElementById('saved-hint')
+  hint.style.display = 'block'
+  setTimeout(() => hint.style.display = 'none', 2000)
+}
+
+function clearAll() {
+  if (!confirm('确定清空所有已添加的物料和备注吗？')) return
+  Object.keys(activeMats).forEach(k => { activeMats[k] = {} })
+  Object.keys(notes).forEach(k => { delete notes[k] })
+  Object.keys(zones).forEach(k => updateBadge(k))
+  updateTotal()
+  if (currentZone) selectZone(currentZone)
+}
+
+function exportSummary() {
+  let lines = ['超算盒NB · 门店物料点位规划清单', '=' .repeat(40), '']
+  let total = 0
+  Object.entries(zones).forEach(([key, z]) => {
+    const chosen = z.mats.filter((m, i) => activeMats[key] && activeMats[key][i])
+    if (chosen.length === 0 && !notes[key]) return
+    lines.push(`【${z.title}】`)
+    chosen.forEach(m => {
+      lines.push(`  ✓ ${m.label}  ${m.spec}`)
+      total++
+    })
+    if (notes[key]) lines.push(`  备注：${notes[key]}`)
+    lines.push('')
+  })
+  if (total === 0) {
+    lines.push('（尚未添加任何物料，请先在地图上点击区域勾选）')
+  } else {
+    lines.push('-'.repeat(40))
+    lines.push(`合计物料项：${total} 项`)
+  }
+  document.getElementById('export-content').textContent = lines.join('\n')
+  document.getElementById('export-modal').classList.add('open')
+}
+
+function closeModal() {
+  document.getElementById('export-modal').classList.remove('open')
+}
+
+function copyExport() {
+  const text = document.getElementById('export-content').textContent
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target
+    btn.textContent = '已复制！'
+    setTimeout(() => btn.textContent = '复制内容', 1800)
+  }).catch(() => {
+    alert('请手动选中文本复制')
+  })
+}
+
+document.getElementById('export-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal()
+})
+</script>
+</body>
+</html>
